@@ -1,0 +1,16 @@
+# Secrets: the users file is a deploy-time secret and is never committed.
+seed-users*.json
+users*.json
+!deploy/users.example.json
+*.env.local
+# Pack readme is reference material from the issuer, not part of the system.
+/README.txt
+# Build output
+backend/target/
+frontend/node_modules/
+frontend/dist/
+dist/
+bundle/
+*.log
+.idea/
+.vscode/
