@@ -1,0 +1,59 @@
+server:
+  port: 8080
+  shutdown: graceful
+  error:
+    include-stacktrace: never
+    include-message: never
+  tomcat:
+    threads:
+      max: 64
+    # A sender of an oversized batch gets a clean 413 instead of a reset connection: Tomcat reads
+    # and discards the rest of the body up to this size.
+    max-swallow-size: 32MB
+
+spring:
+  application:
+    name: geoalert
+  main:
+    banner-mode: off
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:12}
+      connection-timeout: 5000
+  # Migrations are applied by the one-shot "migrate" step, never by the running application.
+  flyway:
+    enabled: false
+  lifecycle:
+    timeout-per-shutdown-phase: 20s
+  mvc:
+    problemdetails:
+      enabled: false
+    async:
+      request-timeout: -1
+  task:
+    scheduling:
+      pool:
+        size: 3
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+  metrics:
+    tags:
+      instance: ${INSTANCE_ID:local}
+
+geoalert:
+  instance-id: ${INSTANCE_ID:local}
+  users-file: ${USERS_FILE:/run/secrets/users.json}
+  # A report observed further in the future than this is rejected (see README, data findings).
+  max-future-skew: ${MAX_FUTURE_SKEW:PT24H}
+  token-ttl: ${TOKEN_TTL:PT8H}
+  live-poll-interval-ms: ${LIVE_POLL_INTERVAL_MS:500}
