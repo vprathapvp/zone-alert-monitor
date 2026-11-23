@@ -1,0 +1,9 @@
+.git
+**/node_modules
+backend/target
+frontend/dist
+bundle
+dist
+seed-users*.json
+users*.json
+deploy/secrets
