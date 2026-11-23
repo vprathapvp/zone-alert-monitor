@@ -16,3 +16,4 @@ bundle/
 .vscode/
 deploy/secrets/*
 !deploy/secrets/README.txt
+deploy/.traffic.stop
