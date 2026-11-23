@@ -59,13 +59,16 @@ public class IngestRepository {
         Set<String> inserted = new HashSet<>();
         jdbc.query(con -> {
             PreparedStatement ps = con.prepareStatement("""
-                    INSERT INTO report (report_id, asset_id, observed_at, lat, lon, kind, speed_kn, heading_deg, source)
+                    INSERT INTO report (report_id, asset_id, observed_at, lat, lon, kind, speed_kn, heading_deg, source,
+                                        source_type)
                     SELECT * FROM unnest(?::varchar[], ?::varchar[], ?::timestamptz[], ?::float8[], ?::float8[],
-                                         ?::varchar[], ?::float8[], ?::float8[], ?::varchar[])
+                                         ?::varchar[], ?::float8[], ?::float8[], ?::varchar[], ?::text[])
                     ON CONFLICT (report_id) DO NOTHING
                     RETURNING report_id
                     """);
             bindReports(con, ps, sortedById);
+            ps.setArray(10, con.createArrayOf("text",
+                    sortedById.stream().map(r -> SourceType.of(r.source()).name()).toArray()));
             return ps;
         }, rs -> {
             inserted.add(rs.getString(1));

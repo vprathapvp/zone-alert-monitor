@@ -2,6 +2,7 @@ package com.geoalert.asset;
 
 import com.geoalert.common.ApiException;
 import com.geoalert.common.Params;
+import com.geoalert.ingest.SourceType;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -33,12 +34,21 @@ public class AssetController {
     public AssetService.Page<TrackPoint> track(@PathVariable String assetId,
                                                @RequestParam(required = false) String from,
                                                @RequestParam(required = false) String to,
-                                               @RequestParam(required = false) String limit) {
+                                               @RequestParam(required = false) String limit,
+                                               @RequestParam(required = false) String sourceType) {
         Instant f = Params.instant("from", from);
         Instant t = Params.instant("to", to);
         if (f != null && t != null && f.isAfter(t)) {
             throw ApiException.validation("from must not be after to");
         }
-        return assets.track(assetId, f, t, Params.limit(limit, 500, 5000));
+        SourceType type = null;
+        if (sourceType != null) {
+            try {
+                type = SourceType.valueOf(sourceType);
+            } catch (IllegalArgumentException e) {
+                throw ApiException.validation("sourceType must be SATELLITE, GROUND, MOBILE or UNKNOWN");
+            }
+        }
+        return assets.track(assetId, f, t, type, Params.limit(limit, 500, 5000));
     }
 }

@@ -12,7 +12,7 @@ import org.springframework.stereotype.Component;
 public class SchemaGuard {
 
     /** Highest migration this build depends on. */
-    static final String REQUIRED_VERSION = "1";
+    static final String REQUIRED_VERSION = "2";   // 1.1.0 writes report.source_type (CR-1)
 
     public SchemaGuard(JdbcTemplate jdbc) {
         Integer applied = jdbc.queryForObject(

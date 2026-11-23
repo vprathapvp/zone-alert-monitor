@@ -1,6 +1,7 @@
 package com.geoalert.asset;
 
 import com.geoalert.common.Times;
+import com.geoalert.ingest.SourceType;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -14,7 +15,8 @@ public record AssetPosition(
         double lon,
         Double speedKn,
         Double headingDeg,
-        String source) {
+        String source,
+        String sourceType) {
 
     /** Column order: asset_id, kind, report_id, observed_at, lat, lon, speed_kn, heading_deg, source. */
     public static final String COLUMNS = "asset_id, kind, report_id, observed_at, lat, lon, speed_kn, heading_deg, source";
@@ -29,6 +31,7 @@ public record AssetPosition(
                 rs.getDouble(6),
                 rs.getObject(7, Double.class),
                 rs.getObject(8, Double.class),
-                rs.getString(9));
+                rs.getString(9),
+                SourceType.of(rs.getString(9)).name());
     }
 }

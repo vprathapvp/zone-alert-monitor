@@ -2,6 +2,7 @@ package com.geoalert.asset;
 
 import com.geoalert.common.ApiException;
 import com.geoalert.common.Times;
+import com.geoalert.ingest.SourceType;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,24 +55,32 @@ public class AssetService {
 
     /** Stored reports of one asset, oldest observedAt first, bounded by limit. */
     @Transactional(readOnly = true)
-    public Page<TrackPoint> track(String assetId, Instant from, Instant to, int limit) {
+    public Page<TrackPoint> track(String assetId, Instant from, Instant to, SourceType sourceType, int limit) {
         Boolean exists = jdbc.queryForObject("SELECT EXISTS (SELECT 1 FROM asset_position WHERE asset_id = ?)",
                 Boolean.class, assetId);
         if (!Boolean.TRUE.equals(exists)) {
             throw ApiException.notFound("Asset not found");
         }
         List<TrackPoint> rows = jdbc.query("""
-                SELECT report_id, observed_at, lat, lon, source
-                  FROM report
-                 WHERE asset_id = ?
-                   AND (?::timestamptz IS NULL OR observed_at >= ?::timestamptz)
-                   AND (?::timestamptz IS NULL OR observed_at <= ?::timestamptz)
+                SELECT report_id, observed_at, lat, lon, source, st
+                  FROM (SELECT report_id, observed_at, lat, lon, source,
+                               -- Until the CR-1 backfill has run, older rows have no stored value yet.
+                               coalesce(source_type, report_source_type_of(source)) AS st
+                          FROM report
+                         WHERE asset_id = ?
+                           AND (?::timestamptz IS NULL OR observed_at >= ?::timestamptz)
+                           AND (?::timestamptz IS NULL OR observed_at <= ?::timestamptz)) r
+                 WHERE (?::text IS NULL OR st = ?::text)
                  ORDER BY observed_at, report_id
                  LIMIT ?
                 """, (rs, i) -> new TrackPoint(rs.getString(1), Times.format(rs.getTimestamp(2)),
-                        rs.getDouble(3), rs.getDouble(4), rs.getString(5)),
-                assetId, ts(from), ts(from), ts(to), ts(to), limit + 1);
+                        rs.getDouble(3), rs.getDouble(4), rs.getString(5), rs.getString(6)),
+                assetId, ts(from), ts(from), ts(to), ts(to), name(sourceType), name(sourceType), limit + 1);
         return truncate(rows, limit);
+    }
+
+    private static String name(SourceType t) {
+        return t == null ? null : t.name();
     }
 
     private static java.sql.Timestamp ts(Instant i) {
