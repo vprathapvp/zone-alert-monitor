@@ -57,6 +57,7 @@ public abstract class IntegrationTest {
         r.add("spring.datasource.password", PG::getPassword);
         r.add("geoalert.users-file", USERS_FILE::toString);
         r.add("geoalert.instance-id", () -> "test-a");
+        r.add("DRAIN_SECONDS", () -> "0");
     }
 
     @LocalServerPort

@@ -14,6 +14,10 @@ server:
 spring:
   application:
     name: geoalert
+  config:
+    # Deploy-time secrets mounted as files (compose secrets): /run/secrets/DB_PASSWORD becomes
+    # the property DB_PASSWORD. Nothing secret is in the image or the repository.
+    import: optional:configtree:/run/secrets/
   main:
     banner-mode: off
   datasource:

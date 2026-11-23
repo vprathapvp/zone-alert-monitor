@@ -40,7 +40,7 @@ public final class MigrateCommand {
             } else {
                 zones = Files.readAllBytes(Path.of(zonesFile));
             }
-            migrate(requireEnv("DB_URL"), requireEnv("DB_USER"), requireEnv("DB_PASSWORD"),
+            migrate(requireEnv("DB_URL"), requireEnv("DB_USER"), secret("DB_PASSWORD"),
                     envOr("FLYWAY_TARGET", "latest"), zones);
             return 0;
         } catch (Exception e) {
@@ -75,6 +75,19 @@ public final class MigrateCommand {
             throw new IllegalStateException("environment variable " + name + " is required");
         }
         return v;
+    }
+
+    /** From the environment, else from the mounted secret file /run/secrets/NAME. */
+    private static String secret(String name) throws IOException {
+        String v = System.getenv(name);
+        if (v != null && !v.isBlank()) {
+            return v;
+        }
+        Path file = Path.of("/run/secrets", name);
+        if (Files.isReadable(file)) {
+            return Files.readString(file).strip();
+        }
+        throw new IllegalStateException(name + " is required (environment or /run/secrets/" + name + ")");
     }
 
     private static String envOr(String name, String fallback) {

@@ -31,7 +31,8 @@ class TwoInstancesTest extends IntegrationTest {
                 "--spring.datasource.username=" + PG.getUsername(),
                 "--spring.datasource.password=" + PG.getPassword(),
                 "--geoalert.users-file=" + USERS_FILE,
-                "--geoalert.instance-id=test-b");
+                "--geoalert.instance-id=test-b",
+                "--DRAIN_SECONDS=0");
         int port2 = ((WebServerApplicationContext) second).getWebServer().getPort();
         api2 = new Api("http://localhost:" + port2);
     }
