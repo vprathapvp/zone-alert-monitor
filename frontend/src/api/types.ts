@@ -20,7 +20,12 @@ export interface AssetPosition {
   speedKn?: number | null;
   headingDeg?: number | null;
   source?: string | null;
+  /** 1.1.0 (CR-1). */
+  sourceType?: SourceType;
 }
+
+/** 1.1.0 (CR-1): derived from source. */
+export type SourceType = 'SATELLITE' | 'GROUND' | 'MOBILE' | 'UNKNOWN';
 
 export interface TrackPoint {
   reportId: string;
@@ -28,6 +33,8 @@ export interface TrackPoint {
   lat: number;
   lon: number;
   source?: string | null;
+  /** 1.1.0 (CR-1); absent when served by a 1.0.0 instance during the rolling upgrade. */
+  sourceType?: SourceType;
 }
 
 export type AlertStatus = 'OPEN' | 'CLAIMED' | 'RESOLVED';

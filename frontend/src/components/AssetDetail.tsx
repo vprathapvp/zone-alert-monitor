@@ -27,6 +27,7 @@ export function AssetDetail({ assetId, track, trackError, onClose }: {
           <dt>Speed</dt><dd>{p.speedKn != null && p.speedKn >= 0 ? `${p.speedKn} kn` : 'unknown'}</dd>
           <dt>Heading</dt><dd>{p.headingDeg != null ? `${(((p.headingDeg % 360) + 360) % 360).toFixed(1)}°` : 'unknown'}</dd>
           <dt>Source</dt><dd>{p.source ?? '—'}</dd>
+          <dt>Source type</dt><dd>{p.sourceType ?? '—'}</dd>
           <dt>Report</dt><dd className="mono">{p.reportId}</dd>
         </dl>
       )}
@@ -34,11 +35,11 @@ export function AssetDetail({ assetId, track, trackError, onClose }: {
       {trackError && <p role="alert" className="error">{trackError}</p>}
       <div className="track-wrap">
         <table className="track">
-          <thead><tr><th scope="col">Observed</th><th scope="col">Lat</th><th scope="col">Lon</th><th scope="col">Source</th></tr></thead>
+          <thead><tr><th scope="col">Observed</th><th scope="col">Lat</th><th scope="col">Lon</th><th scope="col">Source</th><th scope="col">Source type</th></tr></thead>
           <tbody>
             {track.slice(-50).reverse().map((t) => (
               <tr key={t.reportId}>
-                <td>{t.observedAt.slice(11, 23)}</td><td>{t.lat.toFixed(4)}</td><td>{t.lon.toFixed(4)}</td><td>{t.source ?? '—'}</td>
+                <td>{t.observedAt.slice(11, 23)}</td><td>{t.lat.toFixed(4)}</td><td>{t.lon.toFixed(4)}</td><td>{t.source ?? '—'}</td><td>{t.sourceType ?? '—'}</td>
               </tr>
             ))}
           </tbody>

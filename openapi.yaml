@@ -1,7 +1,7 @@
 openapi: 3.0.3
 info:
   title: Zone Watch API (fixed contract)
-  version: 1.0.0
+  version: 1.1.0
   description: |
     Fixed external contract for the Zone Watch software engineering assessment.
     Implement these endpoints exactly as described. Automated checks call them.
@@ -29,6 +29,11 @@ info:
       INVALID_COORDINATE  lat or lon is not a number or is out of range
       INVALID_TIMESTAMP   observedAt cannot be read as an instant
       INVALID_FIELD       any other field breaks its rule (for example the assetId pattern)
+
+    Changes in 1.1.0 (CR-1)
+      Every stored report has a source type derived from its source: prefix SAT = SATELLITE,
+      GND = GROUND, MOB = MOBILE, anything else or no source = UNKNOWN. Track points return it as
+      sourceType and the track accepts the filter ?sourceType=.
 
     Roles
       INGEST      may call POST /reports/batch and GET /stats
@@ -153,6 +158,10 @@ paths:
         - { name: from, in: query, schema: { type: string, format: date-time } }
         - { name: to, in: query, schema: { type: string, format: date-time } }
         - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 5000, default: 500 } }
+        - name: sourceType
+          in: query
+          description: Only points of this source type (1.1.0). Any other value is refused with 400 VALIDATION_FAILED.
+          schema: { $ref: "#/components/schemas/SourceType" }
       responses:
         "200":
           description: Track points
@@ -376,15 +385,21 @@ components:
         speedKn: { type: number, nullable: true }
         headingDeg: { type: number, nullable: true }
         source: { type: string, nullable: true }
+        sourceType: { $ref: "#/components/schemas/SourceType" }
     TrackPoint:
       type: object
-      required: [reportId, observedAt, lat, lon]
+      required: [reportId, observedAt, lat, lon, sourceType]
       properties:
         reportId: { type: string }
         observedAt: { type: string, format: date-time }
         lat: { type: number }
         lon: { type: number }
         source: { type: string, nullable: true }
+        sourceType: { $ref: "#/components/schemas/SourceType" }
+    SourceType:
+      type: string
+      description: Derived from source (1.1.0). SAT* = SATELLITE, GND* = GROUND, MOB* = MOBILE, else UNKNOWN.
+      enum: [SATELLITE, GROUND, MOBILE, UNKNOWN]
     AlertStatus:
       type: string
       enum: [OPEN, CLAIMED, RESOLVED]
