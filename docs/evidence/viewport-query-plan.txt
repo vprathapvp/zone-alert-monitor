@@ -1,0 +1,21 @@
+                                                                   QUERY PLAN                                                                   
+------------------------------------------------------------------------------------------------------------------------------------------------
+ Limit  (cost=19.71..19.72 rows=3 width=80) (actual time=10.731..11.032 rows=1001 loops=1)
+   Buffers: shared hit=862
+   ->  Sort  (cost=19.71..19.72 rows=3 width=80) (actual time=10.727..10.857 rows=1001 loops=1)
+         Sort Key: asset_id COLLATE "C"
+         Sort Method: quicksort  Memory: 284kB
+         Buffers: shared hit=862
+         ->  Bitmap Heap Scan on asset_position  (cost=8.30..19.68 rows=3 width=80) (actual time=6.245..7.634 rows=1772 loops=1)
+               Recheck Cond: (point(lon, lat) <@ '(177,42),(168,33)'::box)
+               Heap Blocks: exact=109
+               Buffers: shared hit=859
+               ->  Bitmap Index Scan on asset_position_point_idx  (cost=0.00..8.30 rows=3 width=0) (actual time=6.154..6.155 rows=1772 loops=1)
+                     Index Cond: (point(lon, lat) <@ '(177,42),(168,33)'::box)
+                     Buffers: shared hit=750
+ Planning:
+   Buffers: shared hit=163
+ Planning Time: 2.785 ms
+ Execution Time: 11.541 ms
+(17 rows)
+

@@ -13,7 +13,7 @@ import { positions } from '../state/positions';
  * loaded only after "hello". Everything committed after that point arrives as an event, and the
  * stores merge by event time / version, so snapshot and events can arrive in any order.
  */
-const SILENCE_LIMIT_MS = 35_000; // server heartbeat is every 15 s
+const SILENCE_LIMIT_MS = 20_000; // server heartbeat is every 15 s; data events come every 0.5 s
 const WORLD = '-180,-90,180,90';
 
 export class LiveClient {

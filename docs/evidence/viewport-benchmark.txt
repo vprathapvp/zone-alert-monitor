@@ -1,0 +1,12 @@
+Viewport query benchmark (scripts/bench_viewport.py), 1,000 requests, 4 concurrent, through the
+load balancer, 3,000 assets loaded, limit=1000. Measured 2026-11-23, same laptop.
+
+Boxes of 5 degrees (median 235 assets matched, max 639):
+  p50 19.9 ms   p95 42.6 ms   p99 64.1 ms   max 87.9 ms   100% within 100 ms
+
+Boxes of 9 degrees (median 330 matched, max 1000):
+  p50 29.6 ms   p95 67.5 ms   p99 104.6 ms  max 193.2 ms  98.8% within 100 ms
+
+Database share: 11.5 ms for 1,000 rows (see viewport-query-plan.txt: bitmap scan of the GiST index
+on point(lon, lat), then sort by asset_id). The rest is JSON serialisation, the load balancer and
+Docker Desktop's port forwarding.

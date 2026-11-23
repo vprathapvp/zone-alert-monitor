@@ -1,0 +1,40 @@
+{
+  "measuredAt": "2026-11-23T07:55:29.801Z",
+  "scenario": "replay.py --speed 5 (about 1,500 updates/s), 3,000 assets, continuous pan + zoom for 40 s, headless Chromium 1600x900",
+  "longTasks": {
+    "count": 1,
+    "maxMs": 52,
+    "top5Ms": [
+      52
+    ]
+  },
+  "interactionLoopMs": {
+    "median": 433,
+    "iterations": 83
+  },
+  "headerDuringLoad": "Live\n· 3000 assets",
+  "reconnect": "load balancer frozen 30 s while the feed retried; header showed the interruption; back to Live without reload; alert counts equal /stats",
+  "requestsToOtherHosts": [],
+  "axe": [
+    {
+      "label": "sign-in",
+      "violations": [],
+      "passes": 17
+    },
+    {
+      "label": "console with alert panel",
+      "violations": [],
+      "passes": 26
+    },
+    {
+      "label": "resolve dialog",
+      "violations": [],
+      "passes": 14
+    },
+    {
+      "label": "zones (non-map view)",
+      "violations": [],
+      "passes": 24
+    }
+  ]
+}

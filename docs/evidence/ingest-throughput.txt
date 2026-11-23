@@ -1,0 +1,25 @@
+Ingest throughput, measured 2026-11-23 on the developer laptop (12 logical CPUs, 8 GB given to
+Docker Desktop on Windows 11 / WSL2), full stack from deploy/compose.yaml: PostgreSQL 16.8,
+two backend instances, nginx load balancer. Empty database.
+
+$ python replay.py --speed max --connections 4
+    80000 lines sent,   75080 accepted,   1625 duplicates,   295 rejected, 3173 lines/s
+   131000 lines sent,  123997 accepted,   3504 duplicates,   499 rejected, 3718 lines/s
+   191750 lines sent,  180797 accepted,   7229 duplicates,   724 rejected, 4231 lines/s
+done: 225748 lines in 51.9 s (4351 lines/s)
+{"batches": 903, "received": 225748, "accepted": 215962, "duplicates": 8920, "rejected": 866,
+ "httpErrors": 0, "retries": 0, "failedBatches": 0}
+
+Second replay of the same feed (R1 end to end):
+done: 225748 lines in 18.1 s (12439 lines/s)
+{"batches": 903, "received": 225748, "accepted": 0, "duplicates": 224882, "rejected": 866,
+ "httpErrors": 0, "retries": 0, "failedBatches": 0}
+
+Invariant check in the database after a 5x replay during which the load balancer was frozen for
+30 s (sender retried batches):
+ active alerts >1 per asset/zone |      0
+ positions not newest report     |      0
+ assets without position         |      0
+ alerts without OPENED audit     |      0
+ reports stored                  | 144453   = counter accepted 144453
+ rejected lines stored           |    587   = counter rejected 587
