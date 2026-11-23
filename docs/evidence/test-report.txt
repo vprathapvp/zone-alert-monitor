@@ -1,0 +1,27 @@
+Test run 2026-11-23T10:31Z at commit 5fb8da2
+
+$ mvn -f backend/pom.xml test   (JUnit XML: backend/target/surefire-reports/)
+[INFO] Tests run: 2, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.255 s -- in com.geoalert.ingest.BatchSplitTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.138 s -- in com.geoalert.ingest.PositionTrackerTest
+[INFO] Tests run: 50, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.624 s -- in com.geoalert.ingest.ReportValidatorTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 21.16 s -- in com.geoalert.it.AlertLifecycleTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.366 s -- in com.geoalert.it.ApiContractTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.058 s -- in com.geoalert.it.Cr1SourceTypeTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.796 s -- in com.geoalert.it.R1ExactlyOnceTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.373 s -- in com.geoalert.it.R2EventTimeTest
+[INFO] Tests run: 8, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.572 s -- in com.geoalert.it.R3OneActiveAlertTest
+[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 2.134 s -- in com.geoalert.it.R4OneOwnerTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.708 s -- in com.geoalert.it.R5AuditTrailTest
+[INFO] Tests run: 5, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.586 s -- in com.geoalert.it.R6BadInputTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.521 s -- in com.geoalert.it.TwoInstancesTest
+[INFO] Tests run: 9, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.047 s -- in com.geoalert.zone.ZoneGeometryTest
+[INFO] Tests run: 126, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+
+$ cd frontend && npm test
+ ✓ src/map/geo.test.ts (4 tests) 11ms
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+
+Browser end-to-end (cd frontend && npx playwright test, needs a running stack with an empty database):
+see frontend-evidence.json (1 passed, 1.8 min).

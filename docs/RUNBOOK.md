@@ -1,74 +1,46 @@
 # Runbook
 
-Everything below uses only what exists on the site: `docker`, `docker compose`, and the tools inside
-the containers (`psql` in `db`, `wget` in `lb`). Run the commands from the bundle directory. `$C` means
-`docker compose --env-file versions/1.1.0.env`.
+Only what exists on site: `docker compose`, plus `psql` inside `db` and `wget` inside `lb`. Run from
+the bundle directory; `$C` = `docker compose --env-file versions/1.1.0.env`, `$Q` =
+`$C exec db psql -U geoalert -d geoalert -c`.
 
-## First look (any symptom)
+**First look, any symptom:** `$C ps` (all Up, healthy) · `$C logs --since 10m lb` (JSON per request:
+status, upstream, `durationMs`, `requestId`) · `$C logs --since 10m backend-1 backend-2 | grep -E '"(WARN|ERROR)"'`.
+A client's `X-Request-Id` finds the lb line and the backend line: `$C logs | grep <id>`.
 
-```
-$C ps                                              # all services Up; db, lb, console-* (healthy)
-$C logs --since 10m lb | tail -50                  # every request: status, upstream, durationMs, requestId
-$C logs --since 10m backend-1 backend-2 | grep -E '"level":"(WARN|ERROR)"'
-$C exec lb wget -qO- http://127.0.0.1:8080/health  # {"status":"UP"} = one instance can serve
-```
-Logs are JSON, one line per event, with `requestId`. A request ID from a client error leads through the
-lb line to the backend line: `$C logs backend-1 backend-2 | grep <requestId>`.
+## Slow ingest
 
-## Ingest is slow
+1. **Rate:** each backend logs `ingest summary (last 60 s)` every minute (`linesPerSec`, accepted,
+   duplicates, rejected, http5xx): `$C logs --since 5m backend-1 backend-2 | grep "ingest summary"`.
+2. **Database waits:**
+   `$Q "SELECT pid, state, wait_event_type, wait_event, now()-xact_start AS age, left(query,60) FROM pg_stat_activity WHERE datname='geoalert' AND state<>'idle' ORDER BY age DESC"`
+   - `Lock/advisory`: batches waiting on each other's assets: expected under overlap, lowers throughput.
+   - `idle in transaction` with a large age: an open manual session; `SELECT pg_terminate_backend(<pid>)`.
+   - `IO` / `WALWrite`, or slow `COMMIT` lines in `$C logs db | grep duration` (> 500 ms is logged):
+     the disk is saturated, e.g. by the CR-1 backfill. Cancel it (`pg_cancel_backend`) or raise `pause_ms`.
+3. **Backend CPU:** `docker stats`. Retried batches: `$C logs backend-1 | grep -c "transient database error"`.
+4. Many **rejections** look like low throughput: `GET /api/v1/rejections` (supervisor) shows line, code,
+   raw text and time.
 
-1. **Measure.** Each backend logs `ingest summary (last 60 s)` once a minute with `linesPerSec`,
-   `accepted`, `duplicates`, `rejected`, `http5xx`: `$C logs --since 5m backend-1 backend-2 | grep "ingest summary"`.
-   The two instances together should do well over 2,000 lines/s. `replay.py` prints the client's view.
-2. **Is it the database?** Look at active queries and waits:
-   ```
-   $C exec db psql -U geoalert -c "SELECT pid, state, wait_event_type, wait_event, now()-xact_start AS age, left(query,80)
-                                    FROM pg_stat_activity WHERE datname='geoalert' AND state<>'idle' ORDER BY age DESC"
-   ```
-   - Many `Lock / advisory`: batches serialise on the same assets. Expected under heavy overlap; it shows
-     as lower throughput, not errors. Smaller batches from the sender spread the locks.
-   - A long `age` on one `idle in transaction` session: something holds a transaction open (e.g. a manual
-     psql session). It also holds back the live feed (see below). `idle_in_transaction_session_timeout`
-     (60 s) ends it; or `SELECT pg_terminate_backend(<pid>)`.
-   - `IO`/`WALWrite` waits: disk is the bottleneck. Check `docker stats` for the db container.
-   - Slow statements are logged by PostgreSQL itself (> 500 ms): `$C logs --since 10m db | grep duration`.
-3. **Is it the backend?** `docker stats` CPU near the limit on backend-* means validation/JSON is the
-   limit. `$C logs backend-1 | grep -c "transient database error"` counts retried batches.
-4. **Rejections are not slowness**, but a sender sending garbage looks like low accepted counts.
-   Inspect them as a supervisor: `GET /api/v1/rejections` (line, code, raw text, time).
+## Console stops updating
 
-## The console stops updating
-
-1. The header says *"Live updates interrupted … reconnecting"*: the browser lost its stream. It retries
-   every ≤ 5 s and reloads a full snapshot on reconnect; nothing to do once the network is back.
-2. Header says *Live* but nothing moves: is data arriving at all? `GET /api/v1/stats` twice: `accepted`
-   must grow. If not, the problem is the feed (see *Ingest is slow*), not the console.
-3. Is the change feed running? `$C logs --since 5m backend-1 backend-2 | grep "change feed poll failed"`.
-   Subscribers per instance: `$C exec lb wget -qO- --header "Authorization: Bearer <supervisor token>" http://127.0.0.1:8080/actuator/metrics/live.subscribers`.
-4. A long-running transaction delays live updates: the feed sends only what committed after the oldest
-   running transaction started. Find it with the `pg_stat_activity` query above (oldest `age`).
-5. The lb keeps streams open for 1 h (`proxy_read_timeout`); heartbeats every 15 s keep them alive. If a
-   firewall between browser and lb cuts idle connections faster than 15 s, the console reconnects in a loop:
-   visible as many `/api/v1/live` lines in the lb log.
+1. Header shows *"Live updates interrupted … reconnecting"*: the browser lost its stream and retries every
+   ≤ 5 s, reloading a full snapshot on reconnect. Nothing to do once the network is back.
+2. Header shows *Live* but nothing moves: call `GET /api/v1/stats` twice. If `accepted` does not grow,
+   the feed is the problem (see above), not the console.
+3. Change feed errors: `$C logs --since 5m backend-1 backend-2 | grep "change feed poll failed"`.
+4. A long-running transaction delays live updates (the feed waits for the oldest running transaction):
+   find it with the query in *Slow ingest* step 2.
 
 ## A claim hangs
 
-A claim locks one alert row (`SELECT … FOR UPDATE`) and normally takes a few milliseconds.
+A claim locks one alert row and normally takes milliseconds.
+1. Blocker: `$Q "SELECT pid, now()-xact_start AS age, pg_blocking_pids(pid) AS blocked_by, left(query,60) FROM pg_stat_activity WHERE cardinality(pg_blocking_pids(pid)) > 0"`.
+   Usually a manual session holding `alert` open; `SELECT pg_terminate_backend(<blocker pid>)`.
+2. No lock: find the request in the lb log; two `upstreamStatus` values mean the lb retried it on the other
+   instance. A slow `COMMIT` in the db log means the disk (see *Slow ingest*).
+3. Retrying is safe: a repeated claim by the owner answers 200 and changes nothing.
 
-1. Find the blocker:
-   ```
-   $C exec db psql -U geoalert -c "SELECT a.pid, a.state, now()-a.xact_start AS age, pg_blocking_pids(a.pid) AS blocked_by, left(a.query,80)
-                                    FROM pg_stat_activity a WHERE cardinality(pg_blocking_pids(a.pid)) > 0"
-   ```
-2. The blocker is almost always a transaction left open on the `alert` table (manual SQL session) or an
-   ingest batch stuck on the database disk. Terminate the blocking pid if it is a manual session:
-   `SELECT pg_terminate_backend(<pid>)`.
-3. If no lock is involved, check the request reached a backend: lb log line for the request (status,
-   `upstream`, `durationMs`). `upstreamStatus` with two values means the lb retried on the other instance.
-4. Claims are safe to retry from the console: a repeated claim by the owner answers 200 and changes nothing.
-
-## Useful numbers
-
-`GET /api/v1/stats` (any role) · `/actuator/prometheus` and `/actuator/metrics/{name}` (SUPERVISOR) with
-`ingest.lines{outcome}`, `ingest.batch` (p95/p99), `ingest.late`, `alerts.opened`, `live.subscribers`,
-`http.server.requests{status}`.
+**Metrics (no external service):** `GET /api/v1/stats`; `/actuator/metrics/{name}` and
+`/actuator/prometheus` (supervisor token): `ingest.lines{outcome}`, `ingest.batch`, `ingest.late`,
+`alerts.opened`, `live.subscribers`, `http.server.requests`.
