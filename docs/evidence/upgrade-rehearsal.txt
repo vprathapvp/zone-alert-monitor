@@ -1,0 +1,34 @@
+Upgrade rehearsal: v1.0.0 -> v1.1.0 under traffic (scripts/upgrade-rehearsal.sh)
+
+Setup each time: fresh v1.0.0 stack, recorded feed replayed (215,962 reports) plus 2,000,000 synthetic
+reports inserted directly (2,215,962 rows), then scripts/traffic.py running throughout: reads
+(stats, viewport, alerts, health), claim + resolve of open alerts, and a batch of 50 fresh reports
+every 100 ms. Then the six commands of INSTALL.md section C. Laptop: Docker Desktop / WSL2, Windows 11.
+A request "fails" if it gets no answer within 15 s or answers 5xx.
+
+Run 1 (lb resolved backends by DNS; backfill walked the primary key)
+  114 failed: HTTP 405 on POST /reports/batch for 30 s during step 3. The new console-2 container got
+  the IP the old backend-2 had; nginx still mapped backend-2 to it. -> fixed addresses for all services.
+
+Run 2 (fixed addresses; backfill by primary key)
+  405s gone. Backfill ran at ~650 rows/s, I/O bound (random page reads: report ids are random);
+  one live ingest COMMIT waited 456 s for its WAL flush. Backfill cancelled.
+  -> backfill rewritten to walk heap pages in physical order (TID range scans).
+
+Run 3 (physical-order backfill, batch 64 pages, pause 20 ms)
+  backfill done: 2,223,362 rows in 295.4 s (7,527 rows/s; 18,500-20,000 rows/s mid-run)
+  12,752 ok, 3 failed: one 502 before the upgrade began (nginx had marked both backends down after a
+  single error each, max_fails=1), and two 15 s timeouts during one 149 s storage stall at the end
+  of the backfill (an INSERT waited 149 s with no lock involved: checkpoint fsync storm, 1 GB max_wal_size).
+  The rollout steps themselves (instances 1 and 2 replaced) caused no failure: 89 x "502, 200",
+  24 x "503, 200", 7 x "504, 200" in the lb log are requests retried on the other instance.
+  -> max_fails=3; max_wal_size=4GB and wal_compression=on; backfill pause 50 ms.
+
+Run 4 (final configuration)
+  1. expand 18 s   2. instance 1: 45 s   3. instance 2: 46 s
+  4. backfill done: 2,223,462 rows in 154.2 s (14,418 rows/s overall; 15,500-16,800 rows/s mid-run)
+  5. verify: 0 NULL   6. contract (VALIDATE scan + SET NOT NULL): 34 s, schema at V5
+  traffic: 13,470 requests, 0 failed. Latency p50 32 ms, p99 178 ms, max 2,844 ms.
+  lb log during the run: 91 x "502, 200", 72 x "503, 200", 2 x "504, 200": requests that met a
+  stopping/draining/starting instance and were answered by the other one. The only 5xx answered to a
+  client were 16 /health probes at 09:17-09:18 while the stack was starting, before traffic began.

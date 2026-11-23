@@ -80,6 +80,17 @@ application instance on the same database.
 | **R5** audit trail | Trigger `AFTER INSERT OR UPDATE ON alert` writes the audit row, so it is in the same transaction for *any* writer (application or psql); illegal transitions raise; `alert_audit` has triggers that refuse UPDATE, DELETE and TRUNCATE. | `R5AuditTrailTest` (full lifecycle; repeated commands add nothing; SQL change outside the app is audited; append-only; illegal transition changes nothing) |
 | **R6** bad input isolated | Validation per line outside the transaction mirrors every column constraint (ranges, lengths, control characters), so no line can fail the batch statement; raw rejected line stored as `bytea` (NUL bytes, invalid UTF-8 cannot fail); if the batch statement still fails with a data error, reports are retried one by one. Rejections are counted (`ingest_counter`) and listed by `GET /api/v1/rejections` (SUPERVISOR): line, code, raw text, time. | `R6BadInputTest` (every bad kind mixed with good lines; invalid UTF-8 + NUL; stats; bad and good batches in parallel), `ReportValidatorTest` (50 cases) |
 
+## CR-1 (v1.1.0): source type
+
+Expand → roll out → backfill → contract, each a separate command in [INSTALL.md](INSTALL.md) (C)
+and explained step by step (locks, checks, rollback, backfill time) in [docs/CR-1.md](docs/CR-1.md).
+Migrations V2 (nullable column + fill trigger, catalogue-only), V3 (batched, resumable backfill
+procedure), V4 (`NOT VALID` check, `VALIDATE` without blocking writes), V5 (`SET NOT NULL` using the
+validated check, no scan). Old 1.0.0 instances keep writing during the rollout and their rows get a
+source type from the trigger; 1.1.0 refuses to start before V2. `Cr1SourceTypeTest` replays the
+sequence on a database loaded at 1.0.0, including an old-style writer and a contract step that is
+refused while a NULL remains; `scripts/upgrade-rehearsal.sh` runs the INSTALL commands under traffic.
+
 ## Five decisions and the alternatives I rejected
 
 1. **The database enforces the rules; the application only decides.** Primary key, partial unique
@@ -140,7 +151,8 @@ Found by profiling the whole feed (225,748 lines) and the zone file; every case 
 | Accessibility, axe-core WCAG 2.1 A/AA | **0 violations** on sign-in, console, resolve dialog, zones view; claim and resolve done keyboard-only | same |
 | 30 s network loss | console shows the interruption, returns to Live without reload, counts equal `/stats` | same |
 | Rule invariants after an interrupted 5× replay | 0 violations of R2/R3/R5, counters equal stored rows | [ingest-throughput.txt](docs/evidence/ingest-throughput.txt) |
-| Tests | 115 backend (unit + integration), 4 frontend unit, 1 browser end-to-end | `mvn test`, `npm test`, `npx playwright test` |
+| Rolling upgrade 1.0.0 → 1.1.0 under traffic (INSTALL.md C, 2.2 M rows) | **0 failed of 13,470** requests; backfill 14,400 rows/s (≈ 9.6 h for 500 M) | [upgrade-rehearsal.txt](docs/evidence/upgrade-rehearsal.txt) |
+| Tests | 126 backend (unit + integration), 4 frontend unit, 1 browser end-to-end | `mvn test`, `npm test`, `npx playwright test` |
 
 **Bottleneck.** Ingest throughput climbs over the run (3,173 → 4,351 lines/s) as the JIT warms up,
 and the per-batch cost is in PostgreSQL: index maintenance (two indexes on `report`, three on
@@ -242,3 +254,17 @@ Cases where the generated output was wrong, unsafe or not good enough, and what 
    load balancer (`docker pause`), which stalls every connection like a cut link.
 7. **CSP in a `<meta>` tag** would have broken the Vite dev server's inline preamble; it moved to the
    nginx response header, where it also covers the production build.
+8. **The generated load-balancer design failed the upgrade rehearsal.** nginx found the backends by
+   Docker DNS (`resolve`), and the upgrade step recreated a backend and a console together. The new
+   console container received the IP address the old backend had, nginx still mapped the backend's
+   name to it, and for 30 s ingest POSTs reached the static-file server: 114 requests answered 405,
+   which (correctly) is not retried. The unit and integration tests could not see this; the
+   `scripts/upgrade-rehearsal.sh` run under `scripts/traffic.py` did, and the lb's JSON log
+   (`upstream` address, 0 ms, no backend log line) showed the cause. Fix: every service has a fixed
+   address on the compose network (dynamic addresses confined to another range), and the lb uses the
+   addresses, not DNS.
+9. **The generated backfill walked the table in random order.** It paged through the primary key,
+   which looks textbook, but report ids are random, so every row cost a random page read. The first
+   rehearsal on a cached table looked fine; the second stalled the disk and one live COMMIT waited
+   456 s for its WAL flush (found via `log_min_duration_statement` in the PostgreSQL log). The
+   procedure now walks consecutive heap pages (TID range scans).

@@ -56,7 +56,7 @@ docker compose --env-file versions/upgrade-2-half.env up -d --no-deps --wait bac
 docker compose --env-file versions/1.1.0.env up -d --no-deps --wait backend-2 console-2
 
 # 4. Backfill source_type for existing rows, in small committed batches (resumable, can be cancelled).
-docker compose --env-file versions/1.1.0.env exec -T db psql -U geoalert -d geoalert -v ON_ERROR_STOP=1 -c "CALL report_backfill_source_type(5000, 10)"
+docker compose --env-file versions/1.1.0.env exec -T db psql -U geoalert -d geoalert -v ON_ERROR_STOP=1 -c "CALL report_backfill_source_type(64, 50)"
 
 # 5. Verify: must print 0.
 docker compose --env-file versions/1.1.0.env exec -T db psql -U geoalert -d geoalert -tA -c "SELECT count(*) FROM report WHERE source_type IS NULL"
