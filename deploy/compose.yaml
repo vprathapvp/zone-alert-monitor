@@ -59,6 +59,7 @@ services:
     environment:
       <<: *backend-env
       FLYWAY_TARGET: ${FLYWAY_TARGET:-latest}
+      JAVA_TOOL_OPTIONS: "-Xmx256m -Duser.timezone=UTC"
     secrets: [DB_PASSWORD]
     depends_on:
       db: { condition: service_healthy }
