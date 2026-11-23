@@ -1,0 +1,24 @@
+Offline install test (brief section 7: "remove your local images ... follow your own INSTALL.md with a
+different users file"), 2026-11-23, developer laptop.
+
+1. scripts/build-bundle.sh -> dist/release/: geoalert-deploy-1.1.0.tar.gz (10 KB), images-base.tar.gz
+   (118 MB), images-1.0.0.tar.gz (143 MB), images-1.1.0.tar.gz (143 MB), SHA256SUMS. Every image checked
+   linux/amd64 before saving.
+2. docker compose down -v; docker rmi of all geoalert-* images, postgres:16.8-alpine and
+   nginxinc/nginx-unprivileged:1.27.4-alpine: none of the system's images left.
+3. Fresh directory, the five commands of INSTALL.md (A), verbatim, with a NEW users file (different
+   passwords, feed account renamed "ingest-svc", supervisor renamed "chief"):
+     sha256sum -c SHA256SUMS                   -> 4 x OK
+     tar -xzf geoalert-deploy-1.1.0.tar.gz && cd geoalert
+     for f in ../images-base.tar.gz ../images-1.1.0.tar.gz; do docker load -i "$f"; done
+     cat <users file> > secrets/users.json && printf '%s\n' '<password>' > secrets/DB_PASSWORD
+     docker compose --env-file versions/1.1.0.env up -d     -> no image pulled
+   All six services healthy after ~70 s.
+4. scripts/smoke.py --users <new users file>: 11/11 passed (all 22 users sign in, scenario, redelivery,
+   late report, 20 parallel claims -> 1 winner, audit, CSP).
+5. Least privilege (docker inspect): no privileged container, no host network, CapAdd empty; lb,
+   backends and consoles: CapDrop ALL, read-only root filesystem, non-root user (101 / 10001); only bind
+   mounts are config/nginx-lb.conf and secrets/* inside the bundle directory; database in a named volume.
+
+Not done here: physically disconnecting the network (Docker Desktop on this laptop). No pull happened;
+the network-off run should be repeated on the interview laptop.

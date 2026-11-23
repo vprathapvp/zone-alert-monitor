@@ -45,7 +45,7 @@ done
 
 echo "== base images"
 for img in "${BASE_IMAGES[@]}"; do
-  docker pull --platform "$PLATFORM" "$img"
+  docker image inspect "$img" >/dev/null 2>&1 || docker pull --platform "$PLATFORM" "$img"
   check_arch "$img"
 done
 docker save "${BASE_IMAGES[@]}" | gzip -6 > "$OUT/images-base.tar.gz"
