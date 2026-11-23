@@ -16,7 +16,6 @@ x-hardening: &hardening
   cap_drop: [ALL]
   security_opt: ["no-new-privileges:true"]
   tmpfs: [/tmp]
-  networks: [internal]
   logging:
     driver: json-file
     options: { max-size: "20m", max-file: "5" }
@@ -39,6 +38,12 @@ services:
       - log_min_duration_statement=500
       - -c
       - idle_in_transaction_session_timeout=60000
+      # Fewer forced checkpoints and smaller WAL during bulk work (CR-1 backfill): in rehearsal the
+      # 1 GB default caused checkpoint fsync storms that stalled live commits on a slow disk.
+      - -c
+      - max_wal_size=4GB
+      - -c
+      - wal_compression=on
     volumes: [pgdata:/var/lib/postgresql/data]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U geoalert -d geoalert"]
@@ -47,7 +52,7 @@ services:
       retries: 30
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
-    networks: [internal]
+    networks: { internal: { ipv4_address: 10.242.42.2 } }
     mem_limit: 2g
     shm_size: 256m
 
@@ -64,6 +69,7 @@ services:
     depends_on:
       db: { condition: service_healthy }
     restart: "no"
+    networks: [internal]
     mem_limit: 512m
 
   backend-1:
@@ -72,6 +78,7 @@ services:
     environment:
       <<: *backend-env
       INSTANCE_ID: backend-1
+    networks: { internal: { ipv4_address: 10.242.42.11 } }
     secrets: [DB_PASSWORD, users.json]
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -85,6 +92,7 @@ services:
     environment:
       <<: *backend-env
       INSTANCE_ID: backend-2
+    networks: { internal: { ipv4_address: 10.242.42.12 } }
     secrets: [DB_PASSWORD, users.json]
     depends_on:
       migrate: { condition: service_completed_successfully }
@@ -95,6 +103,7 @@ services:
   console-1: &console
     <<: *hardening
     image: geoalert-console:${CONSOLE_1_VERSION:-1.1.0}
+    networks: { internal: { ipv4_address: 10.242.42.21 } }
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/"]
       interval: 5s
@@ -107,6 +116,7 @@ services:
   console-2:
     <<: *console
     image: geoalert-console:${CONSOLE_2_VERSION:-1.1.0}
+    networks: { internal: { ipv4_address: 10.242.42.22 } }
 
   lb:
     <<: *hardening
@@ -114,6 +124,7 @@ services:
     volumes:
       - ./config/nginx-lb.conf:/etc/nginx/nginx.conf:ro
     ports: ["8080:8080"]
+    networks: { internal: { ipv4_address: 10.242.42.10 } }
     depends_on:
       backend-1: { condition: service_started }
       backend-2: { condition: service_started }
@@ -127,8 +138,16 @@ services:
     restart: unless-stopped
     mem_limit: 128m
 
+# Fixed addresses: a recreated container gets its own address back, so the load balancer can never
+# reach a different service at an address it remembers (dynamic IPs were reused across services
+# during a rolling upgrade in rehearsal). If 10.242.42.0/24 collides with a network at the site,
+# change it here and in config/nginx-lb.conf.
 networks:
-  internal: {}
+  internal:
+    ipam:
+      config:
+        - subnet: 10.242.42.0/24
+          ip_range: 10.242.42.128/25   # dynamic addresses (migrate) never take a pinned one
 
 volumes:
   pgdata: {}
